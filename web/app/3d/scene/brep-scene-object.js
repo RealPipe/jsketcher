@@ -39,9 +39,6 @@ export class BREPSceneSolid extends SceneSolid {
           return faceIndices.map(i => tess.points[i]).map(p => new Vector().set3(p));
         });
         trs.forEach(tr => tr.reverse());
-        if (isMirrored(nurbs)) {
-
-        }
         return trs;
       }
 
@@ -85,17 +82,17 @@ export class BREPSceneSolid extends SceneSolid {
           // face.materialIndex = gIdx++;
           geom.faces.push(face);
         }
-        geom.computeFaceNormals();
-        let texture = createTexture(brepFace);
-        let material = createSolidMaterial(Object.assign({}, this.skin, {
-          map: texture,
-          transparent: true,
-          color: '0xffffff'
-
-        }));
-        this.mesh.add(new THREE.Mesh(geom, material))
         //view.setFaceColor(sceneFace, utils.isSmoothPiece(group.shared) ? 0xFF0000 : null);
       }
+      geom.computeFaceNormals();
+      let texture = createTexture(brepFace);
+      let material = createSolidMaterial(Object.assign({}, this.skin, {
+        map: texture,
+        transparent: true,
+        color: '0xffffff'
+
+      }));
+      this.mesh.add(new THREE.Mesh(geom, material))
 
     }
 
@@ -160,12 +157,15 @@ function createTexture(brepFace) {
   function getCanvas() {
     if (brepFace.data.__canvas === undefined) {
       let canvas = brepFace.data.__canvas = document.createElement("canvas");
-      canvas.width = 200;
-      canvas.height = 200;
+      canvas.width = w;
+      canvas.height = h;
     }
     return brepFace.data.__canvas;
   }
-  let canvas = getCanvas();
+  let canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+
   let ctx = canvas.getContext("2d");
 
 
@@ -173,40 +173,87 @@ function createTexture(brepFace) {
   // ctx.fillStyle = '0xB0C4DE'
   // ctx.fillRect(0,0, 400,400)
 
-  // ctx.fillStyle = 'transparent'
+  // ctx.fillStyle = 'red'
   // ctx.beginPath();
   // ctx.moveTo(25, 25);
   // ctx.lineTo(105, 25);
   // ctx.lineTo(25, 105);
   // ctx.fill();
-  ctx.scale(w,h);
-  ctx.fillStyle = 'red';
+
+  // ctx.setTransform(h,0,0,-h,0,h);
+  if (brepFace.surface.inverted) {
+    ctx.setTransform(-w,0,0,-h,w,h);
+  } else {
+    ctx.setTransform(w,0,0,-h,0,h);
+  }
+  // ctx.scale(w, h)
+  ctx.fillStyle = '#B0C4DE';
   ctx.beginPath();
 
   for (let loop of brepFace.loops) {
+    let uvs = [];
     for (let he of loop.halfEdges) {
-      const uvs = he.edge.curve.verb.tessellate().map(p => brepFace.verb.closestParam(p));
+      let edgeUvs = he.edge.curve.verb.tessellate().map(p => brepFace.surface.verb.closestParam(p));
       if (he.inverted) {
-        uvs.reverse();
+        edgeUvs.reverse();
       }
-      let uv = uvs[0];
-      ctx.moveTo(uv[0], uv[1]);
-      for (let i = 1; i < uv.length; ++i) {
-        uv = uvs[i];
-        ctx.lineTo(uv[0], uv[1]);
+      for (let i = 1; i < edgeUvs.length; ++i) {
+        uvs.push(edgeUvs[i]);
       }
     }
+    if (uvs.length === 0) {
+      continue;
+    }
+    let uv = uvs[0];
+    ctx.moveTo(uv[0], uv[1]);
+    for (let i = 1; i < uvs.length; ++i) {
+      uv = uvs[i];
+      ctx.lineTo(uv[0], uv[1]);
+    }
+    ctx.closePath();
+
   }
-
-
-  ctx.moveTo(55, 55);
-
-  ctx.lineTo(75, 175);
   ctx.fill();
+
+  // ctx.beginPath();
+  //
+  // ctx.moveTo(0.1, 0.1);
+  // ctx.lineTo(0.9, 0.1);
+  // ctx.lineTo(0.9, 0.9);
+  // ctx.lineTo(0.1, 0.9);
+  // ctx.closePath();
+  //
+  //
+  // // ctx.fillStyle = 'transparent'
+  //
+  // ctx.moveTo(0.3, 0.7);
+  // ctx.lineTo(0.7, 0.7);
+  // ctx.lineTo(0.7, 0.3);
+  // ctx.lineTo(0.3, 0.3);
+  // ctx.closePath();
+  // ctx.fill();
+
+
+
+
+  __DEBUG__.Clear();
+  __DEBUG__.AddFace(brepFace);
+  showCanvas(canvas);
+  
 
   let texture = new THREE.Texture(canvas);
   texture.needsUpdate = true;
   return texture;
+}
+
+window.showCanvas = function(canvas) {
+  $('texttest').remove();
+  $('<texttest>', {
+    css: {
+      position: 'absolute',
+      width:250, height:250
+    }
+  }).append(canvas).appendTo($('body'));
 }
 
 export function triangulateToThree(faces, geom) {
